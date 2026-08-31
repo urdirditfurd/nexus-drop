@@ -1,0 +1,16 @@
+node_modules/
+.next/
+dist/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+data/postgres/
+data/redis/
+*.log
+.DS_Store
+.turbo
+coverage/
+.pytest_cache/
+playwright-report/
