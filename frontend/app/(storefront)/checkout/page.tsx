@@ -6,23 +6,68 @@ import Link from "next/link";
 import { CreditCard, Lock, CheckCircle } from "lucide-react";
 import { useCartStore } from "@/lib/cart";
 import { formatPrice } from "@/lib/utils";
+import {
+  createCheckoutIntent,
+  confirmCheckout,
+  ApiError,
+} from "@/lib/api-client";
 
 export default function CheckoutPage() {
   const { items, subtotal, clearCart } = useCartStore();
   const [step, setStep] = useState<"form" | "success">("form");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [orderNumber, setOrderNumber] = useState<string | null>(null);
 
   const shipping = subtotal() >= 5000 ? 0 : 499;
   const total = subtotal() + shipping;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    setError(null);
+
+    const form = new FormData(e.currentTarget);
+    const email = String(form.get("email") ?? "");
+    const firstName = String(form.get("firstName") ?? "");
+    const lastName = String(form.get("lastName") ?? "");
+    const address = String(form.get("address") ?? "");
+    const postalCode = String(form.get("postalCode") ?? "");
+    const city = String(form.get("city") ?? "");
+    const phone = String(form.get("phone") ?? "");
+
+    try {
+      const intent = await createCheckoutIntent({
+        items: items.map(({ product, quantity }) => ({
+          product_id: parseInt(product.id, 10),
+          quantity,
+        })),
+        customer_email: email,
+        currency: "EUR",
+        shipping_address: {
+          firstName,
+          lastName,
+          address,
+          postalCode,
+          city,
+          phone,
+        },
+      });
+
+      await confirmCheckout(intent.payment_intent_id);
+
+      setOrderNumber(intent.order_number);
       setStep("success");
       clearCart();
-    }, 1500);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Paiement impossible. Vérifiez que l'API tourne sur :8000.",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (items.length === 0 && step === "form") {
@@ -50,8 +95,13 @@ export default function CheckoutPage() {
         <p className="mt-2 text-zinc-500">
           Merci pour votre achat. Vous recevrez un email de confirmation.
         </p>
+        {orderNumber && (
+          <p className="mt-2 font-mono text-sm text-zinc-600 dark:text-zinc-400">
+            N° {orderNumber}
+          </p>
+        )}
         <Link
-          href="/orders/ORD-2024-001234"
+          href={orderNumber ? `/orders/${orderNumber}` : "/"}
           className="mt-6 inline-block rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white"
         >
           Suivre ma commande
@@ -64,6 +114,12 @@ export default function CheckoutPage() {
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
       <h1 className="mb-8 text-2xl font-bold sm:text-3xl">Checkout</h1>
 
+      {error && (
+        <p className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-400">
+          {error}
+        </p>
+      )}
+
       <form onSubmit={handleSubmit} className="grid gap-10 lg:grid-cols-5">
         <div className="space-y-8 lg:col-span-3">
           <section className="rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
@@ -71,11 +127,13 @@ export default function CheckoutPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <input
                 required
+                name="email"
                 type="email"
                 placeholder="Email"
                 className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm outline-none focus:border-accent dark:border-zinc-700 dark:bg-zinc-900"
               />
               <input
+                name="phone"
                 type="tel"
                 placeholder="Téléphone"
                 className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm outline-none focus:border-accent dark:border-zinc-700 dark:bg-zinc-900"
@@ -89,28 +147,33 @@ export default function CheckoutPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <input
                   required
+                  name="firstName"
                   placeholder="Prénom"
                   className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm outline-none focus:border-accent dark:border-zinc-700 dark:bg-zinc-900"
                 />
                 <input
                   required
+                  name="lastName"
                   placeholder="Nom"
                   className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm outline-none focus:border-accent dark:border-zinc-700 dark:bg-zinc-900"
                 />
               </div>
               <input
                 required
+                name="address"
                 placeholder="Adresse"
                 className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm outline-none focus:border-accent dark:border-zinc-700 dark:bg-zinc-900"
               />
               <div className="grid gap-4 sm:grid-cols-3">
                 <input
                   required
+                  name="postalCode"
                   placeholder="Code postal"
                   className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm outline-none focus:border-accent dark:border-zinc-700 dark:bg-zinc-900"
                 />
                 <input
                   required
+                  name="city"
                   placeholder="Ville"
                   className="col-span-2 rounded-lg border border-zinc-200 px-4 py-2.5 text-sm outline-none focus:border-accent dark:border-zinc-700 dark:bg-zinc-900"
                 />
@@ -121,23 +184,29 @@ export default function CheckoutPage() {
           <section className="rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
             <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
               <CreditCard className="h-5 w-5" />
-              Paiement
+              Paiement (mode test)
             </h2>
+            <p className="mb-4 text-sm text-zinc-500">
+              Paiement simulé — aucune carte réelle n&apos;est débitée en développement.
+            </p>
             <div className="grid gap-4">
               <input
                 required
-                placeholder="Numéro de carte"
+                placeholder="Numéro de carte (4242 4242 4242 4242)"
+                defaultValue="4242 4242 4242 4242"
                 className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm outline-none focus:border-accent dark:border-zinc-700 dark:bg-zinc-900"
               />
               <div className="grid gap-4 sm:grid-cols-2">
                 <input
                   required
                   placeholder="MM/AA"
+                  defaultValue="12/28"
                   className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm outline-none focus:border-accent dark:border-zinc-700 dark:bg-zinc-900"
                 />
                 <input
                   required
                   placeholder="CVC"
+                  defaultValue="123"
                   className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm outline-none focus:border-accent dark:border-zinc-700 dark:bg-zinc-900"
                 />
               </div>

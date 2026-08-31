@@ -6,7 +6,13 @@ Lance uvicorn sur 0.0.0.0:8000.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
+
+# Cursor sandbox injecte un PLAYWRIGHT_BROWSERS_PATH invalide — forcer l'install globale
+_pw_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "")
+if not _pw_path or "cursor-sandbox-cache" in _pw_path.replace("\\", "/").lower():
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "0"
 
 import uvicorn
 

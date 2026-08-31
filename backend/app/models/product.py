@@ -32,6 +32,14 @@ class Product(Base):
         nullable=True,
     )
     status: Mapped[str] = mapped_column(String(32), default="draft")
+    quarantine_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    margin_calculated: Mapped[float | None] = mapped_column(nullable=True)
+    asin: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    ean: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    keyword: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    velocity_score: Mapped[float | None] = mapped_column(nullable=True)
+    shipping_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

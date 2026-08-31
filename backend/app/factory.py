@@ -15,6 +15,7 @@ from app.database import AsyncSessionLocal, Base, engine
 from app.routers import (
     ai,
     auth,
+    auto_publish,
     checkout,
     dashboard,
     health,
@@ -26,6 +27,7 @@ from app.routers import (
     suppliers,
     trends,
 )
+from app.services.migrate import ensure_product_columns
 from app.services.seed import seed_database
 
 logger = logging.getLogger(__name__)
@@ -37,6 +39,8 @@ async def lifespan(app: FastAPI):
     # Création des tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    await ensure_product_columns(engine)
 
     # Seed démo (admin, produits, tendances)
     async with AsyncSessionLocal() as session:
@@ -80,6 +84,7 @@ def create_app() -> FastAPI:
     app.include_router(listings.router)
     app.include_router(dashboard.router)
     app.include_router(ai.router)
+    app.include_router(auto_publish.router)
     app.include_router(checkout.router)
     app.include_router(storefront.router)
 

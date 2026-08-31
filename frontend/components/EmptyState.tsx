@@ -3,14 +3,12 @@ import { AlertCircle } from "lucide-react";
 interface EmptyStateProps {
   title: string;
   description?: string;
-  fallback?: boolean;
   action?: React.ReactNode;
 }
 
 export function EmptyState({
   title,
   description,
-  fallback,
   action,
 }: EmptyStateProps) {
   return (
@@ -21,11 +19,6 @@ export function EmptyState({
       </h3>
       {description && (
         <p className="mt-2 max-w-sm text-sm text-zinc-500">{description}</p>
-      )}
-      {fallback && (
-        <p className="mt-3 rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-          Données de démonstration affichées
-        </p>
       )}
       {action && <div className="mt-6">{action}</div>}
     </div>

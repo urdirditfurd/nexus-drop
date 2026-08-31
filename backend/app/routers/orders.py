@@ -15,7 +15,10 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 
 
 def _order_to_out(order: Order) -> OrderOut:
-    return OrderOut.model_validate(order)
+    out = OrderOut.model_validate(order)
+    if order.customer is not None:
+        out = out.model_copy(update={"customer_email": order.customer.email})
+    return out
 
 
 @router.get("", response_model=list[OrderOut])
@@ -23,7 +26,7 @@ async def list_orders(session: DbDep, _admin: AdminDep) -> list[OrderOut]:
     """Liste les commandes."""
     result = await session.execute(
         select(Order)
-        .options(selectinload(Order.items))
+        .options(selectinload(Order.items), selectinload(Order.customer))
         .order_by(Order.created_at.desc())
     )
     return [_order_to_out(o) for o in result.scalars().unique().all()]
@@ -34,7 +37,7 @@ async def get_order(order_id: int, session: DbDep, _admin: AdminDep) -> OrderOut
     """Détail commande."""
     result = await session.execute(
         select(Order)
-        .options(selectinload(Order.items))
+        .options(selectinload(Order.items), selectinload(Order.customer))
         .where(Order.id == order_id)
     )
     order = result.scalar_one_or_none()

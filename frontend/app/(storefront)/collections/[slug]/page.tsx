@@ -10,7 +10,7 @@ interface Props {
 }
 
 export async function generateMetadata({ params }: Props) {
-  const { data: collection } = await getCollectionBySlug(params.slug);
+  const collection = await getCollectionBySlug(params.slug);
   return {
     title: collection
       ? `${collection.name} — NEXUS-DROP`
@@ -19,11 +19,10 @@ export async function generateMetadata({ params }: Props) {
 }
 
 export default async function CollectionPage({ params }: Props) {
-  const [{ data: collection }, { data: products, fallback }] =
-    await Promise.all([
-      getCollectionBySlug(params.slug),
-      getProductsByCollection(params.slug),
-    ]);
+  const [collection, products] = await Promise.all([
+    getCollectionBySlug(params.slug),
+    getProductsByCollection(params.slug).catch(() => []),
+  ]);
 
   if (!collection) notFound();
 
@@ -57,17 +56,10 @@ export default async function CollectionPage({ params }: Props) {
         </div>
       </div>
 
-      {fallback && (
-        <p className="mb-4 text-xs text-amber-600 dark:text-amber-400">
-          Mode démo — API indisponible
-        </p>
-      )}
-
       {products.length === 0 ? (
         <EmptyState
           title="Aucun produit dans cette collection"
-          description="Revenez bientôt, de nouveaux produits arrivent."
-          fallback={fallback}
+          description="Lancez l'auto-publish pour alimenter cette collection."
         />
       ) : (
         <>

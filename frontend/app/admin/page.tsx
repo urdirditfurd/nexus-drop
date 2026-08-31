@@ -11,60 +11,38 @@ import {
   BarChart,
   Bar,
 } from "recharts";
-import { DollarSign, ShoppingCart, Users, TrendingUp, Package, Percent } from "lucide-react";
+import {
+  DollarSign,
+  ShoppingCart,
+  Package,
+  Percent,
+  TrendingUp,
+  ListChecks,
+} from "lucide-react";
 import { useEffect, useState } from "react";
-import { formatPrice } from "@/lib/utils";
-
-interface Kpis {
-  revenue: number;
-  orders: number;
-  visitors: number;
-  conversionRate: number;
-  avgOrderValue: number;
-  productsSold: number;
-}
-
-interface ChartPoint {
-  name: string;
-  revenue: number;
-  orders: number;
-}
+import {
+  getDashboardKpis,
+  getDashboardChart,
+  type DashboardKPIs,
+  type ChartPoint,
+} from "@/lib/api-client";
 
 export default function AdminDashboard() {
-  const [kpis, setKpis] = useState<Kpis | null>(null);
+  const [kpis, setKpis] = useState<DashboardKPIs | null>(null);
   const [chartData, setChartData] = useState<ChartPoint[]>([]);
-  const [fallback, setFallback] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-        const [kpiRes, chartRes] = await Promise.all([
-          fetch(`${apiUrl}/api/admin/kpis`),
-          fetch(`${apiUrl}/api/admin/chart`),
+        const [kpiData, chart] = await Promise.all([
+          getDashboardKpis(),
+          getDashboardChart(),
         ]);
-        if (!kpiRes.ok || !chartRes.ok) throw new Error("API down");
-        setKpis(await kpiRes.json());
-        setChartData(await chartRes.json());
-      } catch {
-        setFallback(true);
-        setKpis({
-          revenue: 45890,
-          orders: 127,
-          visitors: 3420,
-          conversionRate: 3.7,
-          avgOrderValue: 3610,
-          productsSold: 389,
-        });
-        setChartData([
-          { name: "Lun", revenue: 4200, orders: 12 },
-          { name: "Mar", revenue: 5800, orders: 18 },
-          { name: "Mer", revenue: 3900, orders: 10 },
-          { name: "Jeu", revenue: 7100, orders: 22 },
-          { name: "Ven", revenue: 8900, orders: 28 },
-          { name: "Sam", revenue: 6200, orders: 19 },
-          { name: "Dim", revenue: 4800, orders: 14 },
-        ]);
+        setKpis(kpiData);
+        setChartData(chart);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "API indisponible");
       }
     }
     load();
@@ -73,40 +51,34 @@ export default function AdminDashboard() {
   const cards = kpis
     ? [
         {
-          label: "Revenus",
-          value: formatPrice(kpis.revenue),
+          label: "Revenus du mois",
+          value: `${Number(kpis.revenue_month).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} €`,
           icon: DollarSign,
-          change: "+12.5%",
         },
         {
-          label: "Commandes",
-          value: kpis.orders.toString(),
+          label: "Commandes en attente",
+          value: kpis.pending_orders.toString(),
           icon: ShoppingCart,
-          change: "+8.2%",
         },
         {
-          label: "Visiteurs",
-          value: kpis.visitors.toLocaleString("fr-FR"),
-          icon: Users,
-          change: "+15.3%",
-        },
-        {
-          label: "Conversion",
-          value: `${kpis.conversionRate}%`,
-          icon: Percent,
-          change: "+0.4%",
-        },
-        {
-          label: "Panier moyen",
-          value: formatPrice(kpis.avgOrderValue),
-          icon: TrendingUp,
-          change: "+5.1%",
-        },
-        {
-          label: "Produits vendus",
-          value: kpis.productsSold.toString(),
+          label: "Produits catalogue",
+          value: kpis.total_products.toString(),
           icon: Package,
-          change: "+18.7%",
+        },
+        {
+          label: "Marge moyenne",
+          value: `${kpis.avg_margin_pct}%`,
+          icon: Percent,
+        },
+        {
+          label: "Listings actifs",
+          value: kpis.active_listings.toString(),
+          icon: ListChecks,
+        },
+        {
+          label: "Top tendance",
+          value: kpis.top_trend_keyword ?? "—",
+          icon: TrendingUp,
         },
       ]
     : [];
@@ -116,12 +88,10 @@ export default function AdminDashboard() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <p className="text-sm text-zinc-500">
-          Vue d&apos;ensemble de votre boutique
+          Vue d&apos;ensemble de votre boutique · API live
         </p>
-        {fallback && (
-          <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-            Données de démonstration — API indisponible
-          </p>
+        {error && (
+          <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>
         )}
       </div>
 
@@ -135,15 +105,14 @@ export default function AdminDashboard() {
               <span className="text-sm text-zinc-500">{card.label}</span>
               <card.icon className="h-5 w-5 text-accent" />
             </div>
-            <p className="mt-2 text-2xl font-bold">{card.value}</p>
-            <p className="mt-1 text-xs text-green-600">{card.change} vs sem. dernière</p>
+            <p className="mt-2 text-xl font-bold line-clamp-2">{card.value}</p>
           </div>
         ))}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-4 font-semibold">Revenus hebdomadaires</h2>
+          <h2 className="mb-4 font-semibold">Revenus hebdomadaires (€)</h2>
           <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />

@@ -1,6 +1,6 @@
 """KPIs tableau de bord admin."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter
@@ -14,6 +14,8 @@ from app.models.trend import Trend
 from app.schemas.dashboard import DashboardKPIs
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
 
 @router.get("/kpis", response_model=DashboardKPIs)
@@ -76,3 +78,35 @@ async def get_kpis(session: DbDep, _admin: AdminDep) -> DashboardKPIs:
         avg_margin_pct=round(avg_margin_pct, 2),
         top_trend_keyword=top_trend.keyword if top_trend else None,
     )
+
+
+@router.get("/chart")
+async def get_chart(session: DbDep, _admin: AdminDep) -> list[dict]:
+    """Revenus et commandes sur les 7 derniers jours."""
+    now = datetime.now(timezone.utc)
+    start = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+    paid_statuses = ["paid", "fulfilled", "shipped", "delivered"]
+
+    orders = (
+        await session.execute(
+            select(Order).where(
+                Order.created_at >= start,
+                Order.status.in_(paid_statuses),
+            )
+        )
+    ).scalars().all()
+
+    buckets: dict[str, dict[str, float | int]] = {}
+    for i in range(7):
+        day = start + timedelta(days=i)
+        key = day.strftime("%Y-%m-%d")
+        label = WEEKDAY_LABELS[day.weekday()]
+        buckets[key] = {"name": label, "revenue": 0.0, "orders": 0}
+
+    for order in orders:
+        key = order.created_at.strftime("%Y-%m-%d")
+        if key in buckets:
+            buckets[key]["revenue"] += float(order.total_amount)
+            buckets[key]["orders"] += 1
+
+    return list(buckets.values())

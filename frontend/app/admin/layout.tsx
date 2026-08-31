@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { AdminSidebar } from "@/components/AdminSidebar";
+import { AdminAuthGuard } from "@/components/AdminAuthGuard";
 import { ThemeToggle } from "@/components/ThemeProvider";
 import { Search, Bell, Plus } from "lucide-react";
 import Link from "next/link";
@@ -57,5 +58,9 @@ export default function AdminLayout({
     return <>{children}</>;
   }
 
-  return <AdminShell>{children}</AdminShell>;
+  return (
+    <AdminAuthGuard>
+      <AdminShell>{children}</AdminShell>
+    </AdminAuthGuard>
+  );
 }

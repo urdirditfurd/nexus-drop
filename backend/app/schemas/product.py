@@ -19,6 +19,14 @@ class ProductBase(BaseModel):
     image_urls: list[str] | None = None
     supplier_id: int | None = None
     status: str = "draft"
+    quarantine_reason: str | None = None
+    margin_calculated: float | None = None
+    asin: str | None = None
+    ean: str | None = None
+    source_url: str | None = None
+    keyword: str | None = None
+    velocity_score: float | None = None
+    shipping_cost: Decimal | None = None
 
 
 class ProductCreate(ProductBase):
@@ -38,6 +46,14 @@ class ProductUpdate(BaseModel):
     image_urls: list[str] | None = None
     supplier_id: int | None = None
     status: str | None = None
+    quarantine_reason: str | None = None
+    margin_calculated: float | None = None
+    asin: str | None = None
+    ean: str | None = None
+    source_url: str | None = None
+    keyword: str | None = None
+    velocity_score: float | None = None
+    shipping_cost: Decimal | None = None
 
 
 class ProductOut(ProductBase):

@@ -1,6 +1,7 @@
 """Modèles SQLAlchemy NEXUS-DROP."""
 
 from app.models.admin_user import AdminUser
+from app.models.auto_publish_log import AutoPublishLog
 from app.models.customer import Customer
 from app.models.listing import Listing
 from app.models.order import Order, OrderItem
@@ -11,6 +12,7 @@ from app.models.trend import Trend
 
 __all__ = [
     "AdminUser",
+    "AutoPublishLog",
     "Customer",
     "Listing",
     "Order",

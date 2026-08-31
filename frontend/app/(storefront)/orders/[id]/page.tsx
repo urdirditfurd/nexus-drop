@@ -22,18 +22,11 @@ const statusLabels: Record<string, string> = {
 };
 
 export default async function OrderPage({ params }: Props) {
-  const { data: order, fallback } = await getOrder(params.id);
-
+  const order = await getOrder(params.id);
   if (!order) notFound();
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      {fallback && (
-        <p className="mb-4 text-xs text-amber-600 dark:text-amber-400">
-          Mode démo — API indisponible
-        </p>
-      )}
-
       <nav className="mb-6 text-sm text-zinc-500">
         <Link href="/account" className="hover:text-accent">
           Mon compte

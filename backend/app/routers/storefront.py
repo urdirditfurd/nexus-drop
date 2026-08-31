@@ -7,9 +7,11 @@ import unicodedata
 from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 
 from app.deps import DbDep
+from app.models.order import Order, OrderItem
 from app.models.product import Product
 from app.models.trend import Trend
 from app.utils import loads_json_list
@@ -98,7 +100,7 @@ def product_to_storefront(p: Product) -> dict:
 async def list_storefront_products(session: DbDep) -> list[dict]:
     """Catalogue public (produits actifs)."""
     result = await session.execute(
-        select(Product).where(Product.status == "active").order_by(Product.id.desc())
+        select(Product).where(Product.status.in_(["active", "published"])).order_by(Product.id.desc())
     )
     return [product_to_storefront(p) for p in result.scalars().all()]
 
@@ -118,7 +120,7 @@ async def trending_products(session: DbDep) -> list[dict]:
 @router.get("/products/{slug}")
 async def get_storefront_product(slug: str, session: DbDep) -> dict:
     """Fiche produit par slug."""
-    result = await session.execute(select(Product).where(Product.status == "active"))
+    result = await session.execute(select(Product).where(Product.status.in_(["active", "published"])))
     for p in result.scalars().all():
         if slugify(p.title) == slug:
             return product_to_storefront(p)
@@ -155,7 +157,7 @@ async def get_collection(slug: str) -> dict:
 @router.get("/collections/{slug}/products")
 async def collection_products(slug: str, session: DbDep) -> list[dict]:
     """Produits d'une collection."""
-    result = await session.execute(select(Product).where(Product.status == "active"))
+    result = await session.execute(select(Product).where(Product.status.in_(["active", "published"])))
     items = []
     for p in result.scalars().all():
         if CATEGORY_TO_COLLECTION.get(p.category or "", "accessories") == slug:
@@ -163,35 +165,170 @@ async def collection_products(slug: str, session: DbDep) -> list[dict]:
     return items
 
 
+def _map_order_status(status: str) -> str:
+    """Mappe statuts backend → frontend storefront."""
+    mapping = {
+        "pending": "pending",
+        "paid": "processing",
+        "fulfilled": "processing",
+        "shipped": "shipped",
+        "delivered": "delivered",
+        "cancelled": "cancelled",
+    }
+    return mapping.get(status, "pending")
+
+
+def _tracking_steps(status: str, created_at) -> list[dict]:
+    """Étapes de suivi synthétiques selon le statut."""
+    date_str = created_at.strftime("%d/%m/%Y")
+    steps = [
+        {"label": "Commande confirmée", "date": date_str, "completed": True},
+        {
+            "label": "Préparation en cours",
+            "date": date_str,
+            "completed": status in ("paid", "fulfilled", "shipped", "delivered"),
+        },
+        {
+            "label": "Expédiée",
+            "date": date_str,
+            "completed": status in ("shipped", "delivered"),
+        },
+        {
+            "label": "Livrée",
+            "date": date_str,
+            "completed": status == "delivered",
+        },
+    ]
+    return steps
+
+
+def _order_item_to_storefront(item: OrderItem, product: Product | None) -> dict:
+    """Ligne commande → format frontend."""
+    if product is not None:
+        product_data = product_to_storefront(product)
+    else:
+        product_data = {
+            "id": str(item.product_id or item.id),
+            "slug": "produit",
+            "name": item.title_snapshot or "Produit",
+            "description": "",
+            "price": int(round(float(item.unit_price) * 100)),
+            "image": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800",
+            "inStock": True,
+        }
+    return {"product": product_data, "quantity": item.quantity}
+
+
+@router.get("/orders/{order_number}")
+async def track_order(order_number: str, session: DbDep) -> dict:
+    """Suivi commande public par numéro NXD-XXXXXXXX."""
+    result = await session.execute(
+        select(Order)
+        .options(selectinload(Order.items))
+        .where(Order.order_number == order_number)
+    )
+    order = result.scalar_one_or_none()
+    if order is None:
+        raise HTTPException(status_code=404, detail="Commande introuvable")
+
+    product_ids = [i.product_id for i in order.items if i.product_id]
+    products_map: dict[int, Product] = {}
+    if product_ids:
+        prod_result = await session.execute(
+            select(Product).where(Product.id.in_(product_ids))
+        )
+        products_map = {p.id: p for p in prod_result.scalars().all()}
+
+    frontend_status = _map_order_status(order.status)
+    items = [
+        _order_item_to_storefront(
+            item,
+            products_map.get(item.product_id) if item.product_id else None,
+        )
+        for item in order.items
+    ]
+
+    return {
+        "id": order.order_number,
+        "status": frontend_status,
+        "createdAt": order.created_at.isoformat(),
+        "total": int(round(float(order.total_amount) * 100)),
+        "items": items,
+        "trackingNumber": f"TRK-{order.order_number.replace('NXD-', '')}" if order.status in ("shipped", "delivered") else None,
+        "trackingSteps": _tracking_steps(order.status, order.created_at),
+    }
+
+
 @router.get("/admin/kpis")
 async def admin_kpis_proxy(session: DbDep) -> dict:
-    """KPIs format frontend (sans auth pour démo locale — sécuriser en prod)."""
-    products = (
-        await session.execute(select(Product).where(Product.status == "active"))
+    """KPIs format frontend depuis données réelles."""
+    paid_statuses = ["paid", "fulfilled", "shipped", "delivered"]
+    orders = (
+        await session.execute(
+            select(Order).where(Order.status.in_(paid_statuses))
+        )
     ).scalars().all()
-    revenue = sum(float(p.sell_price) * 10 for p in products)
+
+    revenue_cents = sum(int(round(float(o.total_amount) * 100)) for o in orders)
+    order_count = len(orders)
+    avg_order = revenue_cents // max(1, order_count)
+
+    active_products = (
+        await session.execute(
+            select(func.count()).select_from(Product).where(Product.status == "active")
+        )
+    ).scalar() or 0
+
+    items_sold = (
+        await session.execute(
+            select(func.coalesce(func.sum(OrderItem.quantity), 0))
+            .join(Order, OrderItem.order_id == Order.id)
+            .where(Order.status.in_(paid_statuses))
+        )
+    ).scalar() or 0
+
     return {
-        "revenue": int(revenue * 100),
-        "orders": 42,
-        "visitors": 1280,
-        "conversionRate": 3.2,
-        "avgOrderValue": int(revenue * 100 / max(1, len(products))),
-        "productsSold": len(products) * 8,
+        "revenue": revenue_cents,
+        "orders": order_count,
+        "visitors": max(order_count * 25, active_products * 10),
+        "conversionRate": round(order_count / max(1, order_count * 25) * 100, 1),
+        "avgOrderValue": avg_order,
+        "productsSold": int(items_sold),
     }
 
 
 @router.get("/admin/chart")
-async def admin_chart_proxy() -> list[dict]:
-    """Données graphique hebdo démo."""
-    return [
-        {"name": "Lun", "revenue": 4200, "orders": 12},
-        {"name": "Mar", "revenue": 5800, "orders": 18},
-        {"name": "Mer", "revenue": 3900, "orders": 10},
-        {"name": "Jeu", "revenue": 7100, "orders": 22},
-        {"name": "Ven", "revenue": 8900, "orders": 28},
-        {"name": "Sam", "revenue": 6200, "orders": 19},
-        {"name": "Dim", "revenue": 4800, "orders": 14},
-    ]
+async def admin_chart_proxy(session: DbDep) -> list[dict]:
+    """Données graphique hebdo depuis commandes réelles."""
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    start = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+    labels = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+    paid_statuses = ["paid", "fulfilled", "shipped", "delivered"]
+
+    orders = (
+        await session.execute(
+            select(Order).where(
+                Order.created_at >= start,
+                Order.status.in_(paid_statuses),
+            )
+        )
+    ).scalars().all()
+
+    buckets: dict[str, dict] = {}
+    for i in range(7):
+        day = start + timedelta(days=i)
+        key = day.strftime("%Y-%m-%d")
+        buckets[key] = {"name": labels[day.weekday()], "revenue": 0, "orders": 0}
+
+    for order in orders:
+        key = order.created_at.strftime("%Y-%m-%d")
+        if key in buckets:
+            buckets[key]["revenue"] += int(round(float(order.total_amount) * 100))
+            buckets[key]["orders"] += 1
+
+    return list(buckets.values())
 
 
 @router.post("/ai/generate")

@@ -2,7 +2,28 @@
 
 Plateforme dropshipping multi-marchés : **boutique Shopify-like** + **admin cockpit** + Trend Radar + Supplier Sniper + IA listing + auto-orders.
 
-## Démarrage local (Docker)
+## Démarrage local Windows (sans Docker)
+
+> Si `docker` n'est pas reconnu, utilise cette méthode (Python + Node suffisent).
+
+```powershell
+cd "c:\Users\conta\OneDrive\Documents\dropshipping international\nexus-drop"
+copy .env.example .env
+.\scripts\install-dev.ps1    # 1× seulement
+.\scripts\start-dev.ps1      # a chaque session
+```
+
+| URL | Service |
+|-----|---------|
+| http://localhost:3001 | Boutique + Admin (NEXUS) |
+| http://localhost:3000 | EBX (autre projet — ne pas confondre) |
+| http://localhost:8000/docs | API FastAPI |
+
+**Admin** : `admin@nexus-drop.local` / `NexusAdmin2026!` (change dans `.env`)
+
+## Démarrage local (Docker — optionnel)
+
+Nécessite [Docker Desktop](https://www.docker.com/products/docker-desktop/) installé et démarré.
 
 ```powershell
 cd "c:\Users\conta\OneDrive\Documents\dropshipping international\nexus-drop"
@@ -12,27 +33,7 @@ docker compose up -d --build
 
 | URL | Service |
 |-----|---------|
-| http://localhost:3000 | Boutique + Admin |
 | http://localhost:8080 | Nginx (proxy /api) |
-| http://localhost:8000/docs | API FastAPI |
-
-**Admin** : `admin@nexus-drop.local` / `NexusAdmin2026!` (change dans `.env`)
-
-## Sans Docker (dev rapide)
-
-```powershell
-# Terminal 1 — API
-cd backend
-pip install -r requirements.txt
-$env:DATABASE_URL="sqlite+aiosqlite:///./nexus_drop.db"
-python main.py
-
-# Terminal 2 — Front
-cd frontend
-npm install
-$env:NEXT_PUBLIC_API_URL="http://localhost:8000"
-npm run dev
-```
 
 ## Déploiement VPS (`51.254.135.158`)
 

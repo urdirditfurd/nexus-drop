@@ -4,18 +4,16 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Star, ChevronRight } from "lucide-react";
-import type { Product } from "@/lib/demo-data";
-import { DEMO_REVIEWS } from "@/lib/demo-data";
+import type { Product } from "@/lib/types";
 import { formatPrice } from "@/lib/utils";
 import { AddToCartButton } from "@/components/AddToCartButton";
 import { TrustBadges } from "@/components/TrustBadges";
 
 interface ProductPageClientProps {
   product: Product;
-  fallback: boolean;
 }
 
-export function ProductPageClient({ product, fallback }: ProductPageClientProps) {
+export function ProductPageClient({ product }: ProductPageClientProps) {
   const images = product.images ?? [product.image];
   const [selectedImage, setSelectedImage] = useState(0);
 
@@ -29,12 +27,6 @@ export function ProductPageClient({ product, fallback }: ProductPageClientProps)
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
-      {fallback && (
-        <p className="mb-4 text-xs text-amber-600 dark:text-amber-400">
-          Mode démo — API indisponible
-        </p>
-      )}
-
       <nav className="mb-6 flex items-center gap-1 text-sm text-zinc-500">
         <Link href="/" className="hover:text-accent">
           Accueil
@@ -55,7 +47,6 @@ export function ProductPageClient({ product, fallback }: ProductPageClientProps)
       </nav>
 
       <div className="grid gap-10 lg:grid-cols-2">
-        {/* Gallery */}
         <div>
           <div className="relative aspect-square overflow-hidden rounded-2xl bg-zinc-100 dark:bg-zinc-800">
             <Image
@@ -90,7 +81,6 @@ export function ProductPageClient({ product, fallback }: ProductPageClientProps)
           )}
         </div>
 
-        {/* Info + Sticky cart */}
         <div>
           <div className="lg:sticky lg:top-24">
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
@@ -112,7 +102,7 @@ export function ProductPageClient({ product, fallback }: ProductPageClientProps)
                   ))}
                 </div>
                 <span className="text-sm text-zinc-500">
-                  {product.rating} ({product.reviewCount} avis)
+                  {product.rating} ({product.reviewCount ?? 0} avis)
                 </span>
               </div>
             )}
@@ -142,41 +132,6 @@ export function ProductPageClient({ product, fallback }: ProductPageClientProps)
           </div>
         </div>
       </div>
-
-      {/* Reviews */}
-      <section className="mt-16 border-t border-zinc-200 pt-16 dark:border-zinc-800">
-        <h2 className="mb-8 text-2xl font-bold">
-          Avis clients ({product.reviewCount ?? DEMO_REVIEWS.length})
-        </h2>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {DEMO_REVIEWS.map((review) => (
-            <div
-              key={review.id}
-              className="rounded-xl border border-zinc-200 p-5 dark:border-zinc-800"
-            >
-              <div className="mb-2 flex items-center gap-2">
-                <div className="flex">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Star
-                      key={i}
-                      className={`h-3.5 w-3.5 ${
-                        i < review.rating
-                          ? "fill-amber-400 text-amber-400"
-                          : "text-zinc-300"
-                      }`}
-                    />
-                  ))}
-                </div>
-                <span className="text-sm font-medium">{review.author}</span>
-              </div>
-              <p className="text-sm text-zinc-500">{review.date}</p>
-              <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
-                {review.text}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }

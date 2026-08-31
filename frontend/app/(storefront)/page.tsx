@@ -7,11 +7,10 @@ import { TrustBadges } from "@/components/TrustBadges";
 import { EmptyState } from "@/components/EmptyState";
 
 export default async function HomePage() {
-  const [{ data: collections, fallback: collFallback }, { data: trending, fallback: trendFallback }] =
-    await Promise.all([getCollections(), getTrendingProducts()]);
-
-  const displayTrending =
-    trending.length > 0 ? trending : (await import("@/lib/demo-data")).DEMO_PRODUCTS.slice(0, 4);
+  const [collections, trending] = await Promise.all([
+    getCollections().catch(() => []),
+    getTrendingProducts().catch(() => []),
+  ]);
 
   return (
     <>
@@ -21,7 +20,7 @@ export default async function HomePage() {
             <div>
               <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
                 <Sparkles className="h-3.5 w-3.5" />
-                Nouvelle collection disponible
+                Boutique en ligne
               </div>
               <h1 className="text-balance text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
                 Les produits tendance,{" "}
@@ -38,12 +37,6 @@ export default async function HomePage() {
                 >
                   Découvrir la boutique
                   <ArrowRight className="h-4 w-4" />
-                </Link>
-                <Link
-                  href="/products/ecouteurs-sans-fil-pro"
-                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-6 py-3 text-sm font-medium transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-                >
-                  Produit vedette
                 </Link>
               </div>
             </div>
@@ -74,42 +67,35 @@ export default async function HomePage() {
         {collections.length === 0 ? (
           <EmptyState
             title="Aucune collection"
-            description="Les collections seront bientôt disponibles."
+            description="Lancez l'auto-publish depuis l'admin pour alimenter le catalogue."
           />
         ) : (
-          <>
-            {collFallback && (
-              <p className="mb-4 text-xs text-amber-600 dark:text-amber-400">
-                Mode démo — API indisponible
-              </p>
-            )}
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {collections.map((col) => (
-                <Link
-                  key={col.id}
-                  href={`/collections/${col.slug}`}
-                  className="group relative overflow-hidden rounded-xl"
-                >
-                  <div className="relative aspect-[4/3]">
-                    <Image
-                      src={col.image}
-                      alt={col.name}
-                      fill
-                      className="object-cover transition duration-300 group-hover:scale-105"
-                      sizes="(max-width: 640px) 100vw, 25vw"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-                  </div>
-                  <div className="absolute bottom-0 p-4 text-white">
-                    <h3 className="font-semibold">{col.name}</h3>
-                    <p className="text-sm opacity-80">
-                      {col.productCount} produits
-                    </p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {collections.map((col) => (
+              <Link
+                key={col.id}
+                href={`/collections/${col.slug}`}
+                className="group relative overflow-hidden rounded-xl"
+              >
+                <div className="relative aspect-[4/3]">
+                  <Image
+                    src={col.image}
+                    alt={col.name}
+                    fill
+                    className="object-cover transition duration-300 group-hover:scale-105"
+                    sizes="(max-width: 640px) 100vw, 25vw"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                </div>
+                <div className="absolute bottom-0 p-4 text-white">
+                  <h3 className="font-semibold">{col.name}</h3>
+                  <p className="text-sm opacity-80">
+                    {col.productCount} produits
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
         )}
       </section>
 
@@ -123,21 +109,17 @@ export default async function HomePage() {
               Les produits les plus populaires cette semaine
             </p>
           </div>
-          {displayTrending.length === 0 ? (
-            <EmptyState title="Aucun produit trending" fallback={trendFallback} />
+          {trending.length === 0 ? (
+            <EmptyState
+              title="Aucun produit"
+              description="Le catalogue se remplit via le pipeline auto-publish."
+            />
           ) : (
-            <>
-              {trendFallback && (
-                <p className="mb-4 text-xs text-amber-600 dark:text-amber-400">
-                  Mode démo — API indisponible
-                </p>
-              )}
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                {displayTrending.map((product) => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
-              </div>
-            </>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {trending.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
           )}
         </div>
       </section>

@@ -12,16 +12,14 @@ export default function AdminAiPage() {
     description: string;
     tags: string[];
   } | null>(null);
-  const [fallback, setFallback] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     setLoading(true);
     setResult(null);
-    const { data, fallback: fb } = await generateListing(prompt);
+    const data = await generateListing(prompt);
     setResult(data);
-    setFallback(fb);
     setLoading(false);
   };
 
@@ -99,11 +97,6 @@ export default function AdminAiPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {fallback && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  Mode démo — API indisponible
-                </p>
-              )}
               <div>
                 <label className="mb-1 block text-xs font-medium text-zinc-500">
                   Titre

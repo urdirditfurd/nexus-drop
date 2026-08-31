@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Star } from "lucide-react";
-import type { Product } from "@/lib/demo-data";
+import type { Product } from "@/lib/types";
 import { formatPrice } from "@/lib/utils";
 
 interface ProductCardProps {

@@ -9,14 +9,20 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Racine du backend (parent de app/)
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = BACKEND_ROOT.parent
 MEDIA_DIR = BACKEND_ROOT / "media"
+BACKEND_ENV_FILE = BACKEND_ROOT / ".env"
+ROOT_ENV_FILE = PROJECT_ROOT / ".env"
 
 
 class Settings(BaseSettings):
     """Paramètres chargés depuis .env ou l'environnement."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(
+            str(ROOT_ENV_FILE),
+            str(BACKEND_ENV_FILE),
+        ),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -36,7 +42,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
 
     # CORS — liste séparée par des virgules
-    backend_cors_origins: str = "http://localhost:3000,http://localhost:8080"
+    backend_cors_origins: str = "http://localhost:3001,http://localhost:8080,http://127.0.0.1:3001"
 
     # Stripe (stub test)
     stripe_secret_key: str = "sk_test_replace_me"
@@ -45,6 +51,14 @@ class Settings(BaseSettings):
     # Ollama pour génération IA
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "llama3"
+
+    # Scraper furtif
+    scraper_proxy_url: str = ""
+    scraper_timeout_s: float = 30.0
+
+    # Auto-publish scheduler (Celery Beat — pas de boucle rapide)
+    auto_publish_cron_schedule: str = "0 */6 * * *"
+    auto_publish_max_products: int = 10
 
     @property
     def cors_origins(self) -> list[str]:
@@ -60,6 +74,29 @@ class Settings(BaseSettings):
     def is_sqlite(self) -> bool:
         """True si DATABASE_URL pointe vers SQLite (tests locaux)."""
         return "sqlite" in self.database_url.lower()
+
+    @property
+    def scraper_headless(self) -> bool:
+        """
+        Avec proxy → headless autorisé.
+        Sans proxy → headless=False pour tests locaux furtifs.
+        """
+        return bool(self.effective_scraper_proxy)
+
+    @property
+    def effective_scraper_proxy(self) -> str:
+        """Ignore les placeholders .env non configurés."""
+        raw = self.scraper_proxy_url.strip()
+        if not raw:
+            return ""
+        placeholder_markers = (
+            "proxy.residentiel.com",
+            "username:password",
+            ":port",
+        )
+        if any(marker in raw for marker in placeholder_markers):
+            return ""
+        return raw
 
 
 settings = Settings()
