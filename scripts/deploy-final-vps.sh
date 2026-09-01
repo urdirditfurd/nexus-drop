@@ -11,7 +11,11 @@ git fetch origin
 git reset --hard origin/main
 
 echo "=== PHASE 3 : .env production ==="
-cat > .env << EOF
+if [ -f .env ]; then
+  echo ">> .env existant conservé (mot de passe PostgreSQL préservé)"
+  grep -q "^ENVIRONMENT=" .env && sed -i 's|^ENVIRONMENT=.*|ENVIRONMENT=production|' .env || echo "ENVIRONMENT=production" >> .env
+else
+  cat > .env << EOF
 ENVIRONMENT=production
 POSTGRES_USER=nexus
 POSTGRES_PASSWORD=UnMotDePasseFort2026!
@@ -40,6 +44,7 @@ SCRAPER_PROXY_URL=
 AUTO_PUBLISH_CRON_SCHEDULE=0 */6 * * *
 AUTO_PUBLISH_MAX_PRODUCTS=10
 EOF
+fi
 
 echo "=== PHASE 4 : docker compose rebuild ==="
 docker compose down 2>/dev/null || true

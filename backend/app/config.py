@@ -82,9 +82,12 @@ class Settings(BaseSettings):
     @property
     def scraper_headless(self) -> bool:
         """
-        Avec proxy → headless autorisé.
-        Sans proxy → headless=False pour tests locaux furtifs.
+        Production Docker → toujours headless (pas d'écran).
+        Dev local sans proxy → headless=False pour tests furtifs.
+        Avec proxy → headless=True.
         """
+        if self.is_production:
+            return True
         return bool(self.effective_scraper_proxy)
 
     @property

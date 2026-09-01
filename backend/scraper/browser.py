@@ -13,9 +13,12 @@ from typing import Any
 
 from app.config import settings
 
-# Éviter le cache sandbox Cursor pour les binaires Playwright
+# Éviter le cache sandbox Cursor (dev Windows uniquement — pas en Docker)
+_in_docker = os.path.exists("/.dockerenv")
 _pw_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "")
-if not _pw_path or "cursor-sandbox-cache" in _pw_path.replace("\\", "/").lower():
+if not _in_docker and (
+    not _pw_path or "cursor-sandbox-cache" in _pw_path.replace("\\", "/").lower()
+):
     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "0"
 
 logger = logging.getLogger(__name__)
@@ -73,7 +76,10 @@ def _log_proxy_status_once() -> None:
             "⚠️ Aucun proxy résidentiel configuré. Risque élevé de CAPTCHA sur Amazon/eBay. "
             "Les produits de marque seront mis en quarantaine (comportement attendu du Garde-fou 0)."
         )
-        logger.info("Playwright — mode dev local (headless=False, délais aléatoires 2-5s)")
+        if settings.is_production:
+            logger.info("Playwright — production headless=True (sans proxy)")
+        else:
+            logger.info("Playwright — mode dev local (headless=False, délais aléatoires 2-5s)")
 
 
 def _resolve_user_agent() -> str:
@@ -89,8 +95,11 @@ def _resolve_user_agent() -> str:
 
 def _playwright_launch_options() -> dict[str, Any]:
     proxy_url = settings.effective_scraper_proxy
-    headless = True if proxy_url else False
-    opts: dict[str, Any] = {"headless": headless}
+    headless = settings.scraper_headless
+    opts: dict[str, Any] = {
+        "headless": headless,
+        "args": ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+    }
 
     if proxy_url:
         opts["proxy"] = {"server": proxy_url}

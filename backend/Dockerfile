@@ -4,7 +4,8 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
@@ -13,6 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
+
+# Playwright Chromium + dépendances système Linux (scraping trends/competitors)
+RUN playwright install --with-deps chromium
 
 COPY . .
 
