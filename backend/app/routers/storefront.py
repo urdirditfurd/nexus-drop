@@ -91,7 +91,7 @@ def product_to_storefront(p: Product) -> dict:
         "collectionSlug": collection_slug,
         "rating": 4.7,
         "reviewCount": 128,
-        "tags": ["trending"] if p.status == "active" else [],
+        "tags": ["trending"] if p.status in ("active", "published") else [],
         "inStock": p.stock > 0,
     }
 
@@ -109,7 +109,10 @@ async def list_storefront_products(session: DbDep) -> list[dict]:
 async def trending_products(session: DbDep) -> list[dict]:
     """Produits tendance (actifs, limit 8)."""
     result = await session.execute(
-        select(Product).where(Product.status == "active").order_by(Product.id.desc()).limit(8)
+        select(Product)
+        .where(Product.status.in_(["active", "published"]))
+        .order_by(Product.id.desc())
+        .limit(8)
     )
     items = [product_to_storefront(p) for p in result.scalars().all()]
     for item in items:
@@ -131,7 +134,9 @@ async def get_storefront_product(slug: str, session: DbDep) -> dict:
 async def list_collections(session: DbDep) -> list[dict]:
     """Collections dérivées des catégories."""
     products = (
-        await session.execute(select(Product).where(Product.status == "active"))
+        await session.execute(
+            select(Product).where(Product.status.in_(["active", "published"]))
+        )
     ).scalars().all()
     counts: dict[str, int] = {}
     for p in products:
@@ -275,7 +280,9 @@ async def admin_kpis_proxy(session: DbDep) -> dict:
 
     active_products = (
         await session.execute(
-            select(func.count()).select_from(Product).where(Product.status == "active")
+            select(func.count())
+            .select_from(Product)
+            .where(Product.status.in_(["active", "published"]))
         )
     ).scalar() or 0
 

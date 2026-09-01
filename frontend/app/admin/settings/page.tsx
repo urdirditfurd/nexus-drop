@@ -35,8 +35,8 @@ export default function AdminSettingsPage() {
             icon: CreditCard,
             title: "Paiements",
             fields: [
-              { label: "Stripe", value: "Connecté" },
-              { label: "PayPal", value: "Connecté" },
+              { label: "Stripe", value: "Configurer STRIPE_* dans .env" },
+              { label: "PayPal", value: "Non implémenté" },
             ],
           },
           {

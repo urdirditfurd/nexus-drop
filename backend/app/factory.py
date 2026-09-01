@@ -26,6 +26,7 @@ from app.routers import (
     storefront,
     suppliers,
     trends,
+    webhooks,
 )
 from app.services.migrate import ensure_product_columns
 from app.services.seed import seed_database
@@ -53,11 +54,18 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     """Construit l'application FastAPI."""
+    docs_url = None if settings.is_production else "/docs"
+    redoc_url = None if settings.is_production else "/redoc"
+    openapi_url = None if settings.is_production else "/openapi.json"
+
     app = FastAPI(
         title="NEXUS-DROP API",
         description="Backend dropshipping — catalogue, tendances, IA listing, checkout.",
         version="0.1.0",
         lifespan=lifespan,
+        docs_url=docs_url,
+        redoc_url=redoc_url,
+        openapi_url=openapi_url,
     )
 
     # CORS depuis env
@@ -86,6 +94,7 @@ def create_app() -> FastAPI:
     app.include_router(ai.router)
     app.include_router(auto_publish.router)
     app.include_router(checkout.router)
+    app.include_router(webhooks.router)
     app.include_router(storefront.router)
 
     return app

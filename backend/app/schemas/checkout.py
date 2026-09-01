@@ -26,6 +26,7 @@ class CreateIntentResponse(BaseModel):
     publishable_key: str
     order_id: int
     order_number: str
+    stripe_enabled: bool = False
 
 
 class ConfirmCheckoutRequest(BaseModel):

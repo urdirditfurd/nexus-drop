@@ -215,6 +215,7 @@ export interface CreateIntentResponse {
   publishable_key: string;
   order_id: number;
   order_number: string;
+  stripe_enabled: boolean;
 }
 
 export async function createCheckoutIntent(payload: {

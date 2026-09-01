@@ -1,6 +1,9 @@
-"""Checkout Stripe stub (mode test)."""
+"""Checkout Stripe (réel ou stub selon configuration)."""
+
+from __future__ import annotations
 
 import json
+import logging
 import uuid
 from decimal import Decimal
 
@@ -17,9 +20,22 @@ from app.schemas.checkout import (
     CreateIntentRequest,
     CreateIntentResponse,
 )
-from app.services.stripe_stub import create_payment_intent_stub
+from app.services.stripe_service import create_payment_intent, payment_intent_status, stripe_enabled
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/checkout", tags=["checkout"])
+
+
+@router.get("/config")
+async def checkout_config() -> dict[str, str | bool]:
+    """Expose la clé publique Stripe et le mode (stub vs réel) au frontend."""
+    from app.config import settings
+
+    return {
+        "stripe_enabled": stripe_enabled(),
+        "publishable_key": settings.stripe_publishable_key,
+    }
 
 
 @router.post("/create-intent", response_model=CreateIntentResponse)
@@ -27,10 +43,7 @@ async def create_checkout_intent(
     body: CreateIntentRequest,
     session: DbDep,
 ) -> CreateIntentResponse:
-    """
-    Crée un PaymentIntent Stripe stub + commande pending.
-    Endpoint public (pas d'auth admin) pour le tunnel checkout frontend.
-    """
+    """Crée un PaymentIntent + commande pending."""
     if not body.items:
         raise HTTPException(status_code=400, detail="Panier vide.")
 
@@ -48,7 +61,7 @@ async def create_checkout_intent(
         total += line_total
         order_items.append((product, item.quantity))
 
-    stub = create_payment_intent_stub(total, body.currency)
+    order_number = f"NXD-{uuid.uuid4().hex[:8].upper()}"
 
     result = await session.execute(
         select(Customer).where(Customer.email == body.customer_email)
@@ -66,12 +79,12 @@ async def create_checkout_intent(
     )
 
     order = Order(
-        order_number=f"NXD-{uuid.uuid4().hex[:8].upper()}",
+        order_number=order_number,
         customer_id=customer.id,
         status="pending",
         total_amount=total,
         currency=body.currency.upper(),
-        stripe_payment_intent=stub["payment_intent_id"],
+        stripe_payment_intent=None,
         shipping_address_json=shipping_json,
     )
     session.add(order)
@@ -88,14 +101,24 @@ async def create_checkout_intent(
             )
         )
 
+    intent = create_payment_intent(
+        total,
+        body.currency,
+        order_number=order_number,
+        customer_email=body.customer_email,
+    )
+    order.stripe_payment_intent = intent["payment_intent_id"]
+    await session.flush()
+
     return CreateIntentResponse(
-        client_secret=stub["client_secret"],
-        payment_intent_id=stub["payment_intent_id"],
+        client_secret=intent["client_secret"],
+        payment_intent_id=intent["payment_intent_id"],
         amount=total,
         currency=body.currency.upper(),
-        publishable_key=stub["publishable_key"],
+        publishable_key=intent["publishable_key"],
         order_id=order.id,
         order_number=order.order_number,
+        stripe_enabled=stripe_enabled(),
     )
 
 
@@ -104,7 +127,7 @@ async def confirm_checkout(
     body: ConfirmCheckoutRequest,
     session: DbDep,
 ) -> ConfirmCheckoutResponse:
-    """Confirme le paiement (mode stub — marque la commande comme payée)."""
+    """Confirme le paiement après vérification Stripe (ou stub en dev)."""
     result = await session.execute(
         select(Order).where(Order.stripe_payment_intent == body.payment_intent_id)
     )
@@ -112,8 +135,25 @@ async def confirm_checkout(
     if order is None:
         raise HTTPException(status_code=404, detail="Commande introuvable.")
 
+    if order.status == "paid":
+        return ConfirmCheckoutResponse(
+            order_number=order.order_number,
+            status=order.status,
+        )
+
+    status = payment_intent_status(body.payment_intent_id)
+    if stripe_enabled():
+        if status != "succeeded":
+            raise HTTPException(
+                status_code=402,
+                detail=f"Paiement non confirmé (statut: {status or 'inconnu'}).",
+            )
+    else:
+        logger.warning("Confirmation stub — aucune vérification Stripe")
+
     order.status = "paid"
     await session.flush()
+    logger.info("Commande %s payée", order.order_number)
 
     return ConfirmCheckoutResponse(
         order_number=order.order_number,

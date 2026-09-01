@@ -44,9 +44,13 @@ class Settings(BaseSettings):
     # CORS — liste séparée par des virgules
     backend_cors_origins: str = "http://localhost:3001,http://localhost:8080,http://127.0.0.1:3001"
 
-    # Stripe (stub test)
-    stripe_secret_key: str = "sk_test_replace_me"
-    stripe_publishable_key: str = "pk_test_replace_me"
+    # Environnement (development | production)
+    environment: str = "development"
+
+    # Stripe
+    stripe_secret_key: str = ""
+    stripe_publishable_key: str = ""
+    stripe_webhook_secret: str = ""
 
     # Ollama pour génération IA
     ollama_url: str = "http://localhost:11434"
@@ -82,6 +86,11 @@ class Settings(BaseSettings):
         Sans proxy → headless=False pour tests locaux furtifs.
         """
         return bool(self.effective_scraper_proxy)
+
+    @property
+    def is_production(self) -> bool:
+        """True si ENVIRONMENT=production."""
+        return self.environment.strip().lower() == "production"
 
     @property
     def effective_scraper_proxy(self) -> str:

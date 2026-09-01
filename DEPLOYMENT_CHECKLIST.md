@@ -35,7 +35,12 @@ Variables **recommandées** :
 
 | Variable | Description |
 |----------|-------------|
+| `ENVIRONMENT` | `production` (masque Swagger `/docs`) |
 | `SCRAPER_PROXY_URL` | Proxy résidentiel (Bright Data, Oxylabs, etc.) |
+| `STRIPE_SECRET_KEY` | Clé secrète Stripe (`sk_test_` ou `sk_live_`) |
+| `STRIPE_PUBLISHABLE_KEY` | Clé publique Stripe |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Même clé publique (build frontend) |
+| `STRIPE_WEBHOOK_SECRET` | Secret webhook (`whsec_...`) |
 | `OLLAMA_URL` | `http://host.docker.internal:11434` si Ollama sur le host |
 | `OLLAMA_MODEL` | `llama3` |
 | `AUTO_PUBLISH_CRON_SCHEDULE` | `0 */6 * * *` |
@@ -66,7 +71,34 @@ OLLAMA_MODEL=llama3
 
 ---
 
-## 3. Configurer le proxy scraper (production)
+## 3b. Stripe (paiements réels)
+
+1. Créez un compte sur [dashboard.stripe.com](https://dashboard.stripe.com)
+2. Ajoutez dans `.env` :
+   ```env
+   STRIPE_SECRET_KEY=sk_test_...
+   STRIPE_PUBLISHABLE_KEY=pk_test_...
+   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+   ```
+3. Webhook : URL `https://votre-domaine.com/webhooks/stripe` (ou `http://IP:8080/webhooks/stripe` en test)
+   - Événement : `payment_intent.succeeded`
+   - Copiez `STRIPE_WEBHOOK_SECRET=whsec_...` dans `.env`
+4. Rebuild : `docker compose up -d --build frontend backend`
+
+Sans clés Stripe → mode stub (commandes test sans débit réel).
+
+---
+
+## 3c. Firewall (UFW)
+
+```bash
+chmod +x scripts/setup-ufw.sh
+./scripts/setup-ufw.sh
+```
+
+---
+
+## 4. Configurer le proxy scraper (production)
 
 Sans proxy, Amazon/eBay renverront des CAPTCHA → quarantaine marques (Garde-fou 0).
 

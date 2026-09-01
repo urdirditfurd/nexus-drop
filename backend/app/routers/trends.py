@@ -123,8 +123,8 @@ async def scan_trends(session: DbDep, _admin: AdminDep) -> TrendScanResponse:
 
 
 @router.post("/bulk", response_model=TrendScanResponse)
-async def bulk_trends(body: dict, session: DbDep) -> TrendScanResponse:
-    """Import bulk depuis worker Celery (sans auth en dev)."""
+async def bulk_trends(body: dict, session: DbDep, _admin: AdminDep) -> TrendScanResponse:
+    """Import bulk de trends (admin uniquement)."""
     items = body.get("items") or body.get("trends") or []
     created: list[Trend] = []
     now = datetime.now(timezone.utc)

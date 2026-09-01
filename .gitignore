@@ -10,6 +10,7 @@ backend/.env
 *.db
 *.db-shm
 *.db-wal
+*.db.bak
 data/postgres/
 data/redis/
 *.log
