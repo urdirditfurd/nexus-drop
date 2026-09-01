@@ -76,7 +76,10 @@ export default function AdminAutoPublishPage() {
     try {
       const seed =
         withManualSeed && dryKeyword.trim()
-          ? { keyword: dryKeyword.trim(), ean: dryEan.trim() || undefined }
+          ? {
+              keyword: dryKeyword.trim(),
+              ...(dryEan.trim() ? { ean: dryEan.trim() } : {}),
+            }
           : undefined;
       const result = await runAutoPublishCycle(seed);
       setLastResult(result);
