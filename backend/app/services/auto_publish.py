@@ -25,6 +25,22 @@ from scraper.trends import scrape_trends
 logger = logging.getLogger(__name__)
 
 
+def _normalize_seed(seed: PipelineSeed) -> PipelineSeed:
+    """Nettoie les chaînes vides pour que le mode manuel soit détecté correctement."""
+    return PipelineSeed(
+        keyword=(seed.keyword or "").strip() or None,
+        title=(seed.title or "").strip() or None,
+        asin=(seed.asin or "").strip() or None,
+        ean=(seed.ean or "").strip() or None,
+        source_url=(seed.source_url or "").strip() or None,
+    )
+
+
+def _has_manual_seed(seed: PipelineSeed) -> bool:
+    """Seed explicite → bypass du trend scan automatique."""
+    return bool(seed.keyword or seed.title or seed.ean or seed.asin)
+
+
 async def _log_action(
     session: AsyncSession,
     action: str,
@@ -128,16 +144,23 @@ async def _run_pipeline(
     session: AsyncSession,
     product_seed: dict | PipelineSeed | None = None,
 ) -> PipelineResult:
-    seed = (
+    seed = _normalize_seed(
         product_seed
         if isinstance(product_seed, PipelineSeed)
         else PipelineSeed.model_validate(product_seed or {})
     )
     steps: list[str] = []
 
-    # 1. Trend scan si pas de seed
+    # 1. Trend scan — UNIQUEMENT si aucun seed manuel (keyword/ean/asin/title)
     trend = None
-    if not seed.keyword and not seed.title:
+    if _has_manual_seed(seed):
+        keyword_preview = seed.keyword or seed.title or seed.ean or seed.asin or ""
+        steps.append("manual_seed_skip_trends")
+        logger.info(
+            "Mode manuel — trend scan ignoré, keyword/seed=%s",
+            keyword_preview[:80],
+        )
+    else:
         steps.append("scan_trends")
         trends = await scrape_trends(limit=5)
         if not trends:

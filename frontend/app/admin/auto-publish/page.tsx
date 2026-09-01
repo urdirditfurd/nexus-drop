@@ -34,8 +34,8 @@ export default function AdminAutoPublishPage() {
   const [lastResult, setLastResult] = useState<AutoPublishRunResult | null>(null);
   const [dryRunResult, setDryRunResult] = useState<DryRunReport | null>(null);
   const [dryRunLoading, setDryRunLoading] = useState(false);
-  const [dryKeyword, setDryKeyword] = useState("logitech mx master 3");
-  const [dryEan, setDryEan] = useState("0097855148439");
+  const [dryKeyword, setDryKeyword] = useState("tapis de yoga premium antidérapant");
+  const [dryEan, setDryEan] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -69,12 +69,16 @@ export default function AdminAutoPublishPage() {
     await load();
   };
 
-  const runCycle = async () => {
+  const runCycle = async (withManualSeed = false) => {
     setRunning(true);
     setLastResult(null);
     setDryRunResult(null);
     try {
-      const result = await runAutoPublishCycle();
+      const seed =
+        withManualSeed && dryKeyword.trim()
+          ? { keyword: dryKeyword.trim(), ean: dryEan.trim() || undefined }
+          : undefined;
+      const result = await runAutoPublishCycle(seed);
       setLastResult(result);
       await load();
     } catch (err) {
@@ -122,18 +126,32 @@ export default function AdminAutoPublishPage() {
             Pipeline anti-catastrophe — Scan → Source → Prix → Listing → Publish / Quarantaine
           </p>
         </div>
-        <button
-          onClick={runCycle}
-          disabled={running}
-          className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
-        >
-          {running ? (
-            <RefreshCw className="h-4 w-4 animate-spin" />
-          ) : (
-            <Play className="h-4 w-4" />
-          )}
-          {running ? "Pipeline en cours..." : "Lancer un cycle"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => runCycle(true)}
+            disabled={running || !dryKeyword.trim()}
+            className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+          >
+            {running ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <Play className="h-4 w-4" />
+            )}
+            {running ? "Pipeline..." : "Publier ce mot-clé"}
+          </button>
+          <button
+            onClick={() => runCycle(false)}
+            disabled={running}
+            className="flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-medium hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          >
+            {running ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <Zap className="h-4 w-4" />
+            )}
+            Cycle auto (scan trends)
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -180,7 +198,8 @@ export default function AdminAutoPublishPage() {
           Dry-Run (test à blanc)
         </h2>
         <p className="mb-4 text-xs text-zinc-500">
-          Teste un produit réel sans publier ni quarantaine en base.
+          Teste ou publie avec le mot-clé ci-dessous. « Publier ce mot-clé » ignore le scan
+          trends et va directement au sourcing/pricing.
         </p>
         <div className="mb-4 grid gap-3 sm:grid-cols-2">
           <input

@@ -192,6 +192,7 @@ async def fetch_page_html(url: str, source: str) -> ScrapeResult:
                         return ScrapeResult(
                             success=False,
                             error=last_error,
+                            html=html,
                             source=source,
                             attempt=attempt,
                             captcha_detected=True,
@@ -199,7 +200,13 @@ async def fetch_page_html(url: str, source: str) -> ScrapeResult:
 
                     if status >= 400:
                         last_error = f"HTTP {status}"
-                        logger.warning("[%s] HTTP %d (tentative %d)", source, status, attempt)
+                        logger.error(
+                            "[%s] HTTP %d — URL=%s | html_preview=%r",
+                            source,
+                            status,
+                            url[:80],
+                            html[:200].replace("\n", " "),
+                        )
                         await browser.close()
                         if attempt < MAX_RETRIES:
                             continue
@@ -236,6 +243,12 @@ async def fetch_page_html(url: str, source: str) -> ScrapeResult:
                 await asyncio.sleep(2 * attempt)
                 continue
 
+    logger.error(
+        "[%s] Échec final Playwright — URL=%s | error=%s",
+        source,
+        url[:80],
+        last_error,
+    )
     return ScrapeResult(
         success=False,
         error=last_error or "Échec inconnu",

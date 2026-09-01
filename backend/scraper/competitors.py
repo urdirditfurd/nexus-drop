@@ -30,17 +30,30 @@ def _extract_asin_from_html(html: str) -> str | None:
 
 
 async def _extract_prices_from_url(url: str, source: str) -> tuple[list[float], ScrapeResult]:
+    logger.info("[%s] Scrape prix concurrents — URL=%s", source, url)
     try:
         result = await fetch_page_html(url, source)
         if result.captcha_detected:
-            logger.warning(
-                "[%s] CAPTCHA détecté — prix concurrents indisponibles (proxy recommandé)",
+            html_snippet = (result.html or "")[:200].replace("\n", " ")
+            logger.error(
+                "[%s] CAPTCHA — URL=%s | html_preview=%r",
                 source,
+                url,
+                html_snippet,
             )
             return [], result
         if not result.success or not result.html:
-            logger.warning("[%s] Prix concurrents indisponibles: %s", source, result.error)
+            html_snippet = (result.html or "")[:200].replace("\n", " ")
+            logger.error(
+                "[%s] Prix indisponibles — URL=%s | error=%s | html_preview=%r",
+                source,
+                url,
+                result.error,
+                html_snippet,
+            )
             return [], result
+        html_snippet = result.html[:200].replace("\n", " ")
+        logger.info("[%s] HTML reçu — preview=%r", source, html_snippet)
         prices = [
             float(m.group(1).replace(",", "."))
             for m in PRICE_EUR.finditer(result.html)

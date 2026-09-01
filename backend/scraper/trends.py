@@ -95,17 +95,30 @@ def _parse_trend_cards(html: str, source: str, url: str, limit: int = 15) -> lis
 
 
 async def _scrape_source(url: str, source: str) -> tuple[list[dict[str, Any]], ScrapeResult]:
+    logger.info("[%s] Scrape URL: %s", source, url)
     try:
         result = await fetch_page_html(url, source)
         if result.captcha_detected:
-            logger.warning(
-                "[%s] CAPTCHA détecté — scrape interrompu proprement (proxy recommandé)",
+            html_snippet = (result.html or "")[:200].replace("\n", " ")
+            logger.error(
+                "[%s] CAPTCHA détecté — URL=%s | html_preview=%r",
                 source,
+                url,
+                html_snippet,
             )
             return [], result
         if not result.success or not result.html:
-            logger.warning("[%s] Scrape échoué: %s", source, result.error)
+            html_snippet = (result.html or "")[:200].replace("\n", " ")
+            logger.error(
+                "[%s] Scrape échoué — URL=%s | error=%s | html_preview=%r",
+                source,
+                url,
+                result.error,
+                html_snippet,
+            )
             return [], result
+        html_snippet = result.html[:200].replace("\n", " ")
+        logger.info("[%s] Scrape OK — %d octets | preview=%r", source, len(result.html), html_snippet)
         items = _parse_trend_cards(result.html, source, url)
         if items and items[0].get("asin"):
             logger.info("[%s] ASIN extrait: %s", source, items[0]["asin"])
