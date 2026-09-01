@@ -24,7 +24,7 @@ from app.utils import dumps_json
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_TIMEOUT_S = 45.0
+OLLAMA_TIMEOUT_S = 15.0
 
 
 class OllamaListingOutput(BaseModel):
