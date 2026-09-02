@@ -146,35 +146,29 @@ def _run_guards(
                 competitor_min=competitor_min or None,
             )
 
-    # Garde-fou 3 — Marge nette 5 %
+    # Garde-fou 3 — Marge nette 5 % minimum
     base = supplier_cost + shipping
     fees = base * FEE_RATE
     min_selling_price = (base + fees) / NET_MARGIN_DIVISOR
 
-    # Garde-fou 4 — Compétitivité
+    # Garde-fou 4 — Compétitivité vs marché
     if competitor_min > 0:
         competitive_ceiling = competitor_min * UNDERcut_FACTOR
+        # RÈGLE STRICTE NEXUS-DROP : Si on ne peut pas battre le prix concurrent TOUT
+        # en gardant une marge nette >= 5%, on ne publie PAS. Le produit part en quarantaine.
         if min_selling_price > competitor_min:
-            reason = (
-                f"Prix minimum rentable {min_selling_price:.2f} € > concurrent {competitor_min:.2f} € — "
-                f"impossible d'être moins cher avec 5 % de marge nette."
-            )
             return PricingResult(
                 status=PricingStatus.QUARANTINE,
-                reason=reason,
+                reason="Marge < 5% ou prix non compétitif",
                 guard_failed="competitive",
                 min_selling_price=round(min_selling_price, 2),
                 competitor_min=competitor_min,
             )
         target_price = min(min_selling_price, competitive_ceiling)
         if target_price > competitor_min:
-            reason = (
-                f"Prix cible {target_price:.2f} € > minimum marché {competitor_min:.2f} € — "
-                f"non compétitif."
-            )
             return PricingResult(
                 status=PricingStatus.QUARANTINE,
-                reason=reason,
+                reason="Marge < 5% ou prix non compétitif",
                 guard_failed="competitive",
                 min_selling_price=round(min_selling_price, 2),
                 competitor_min=competitor_min,

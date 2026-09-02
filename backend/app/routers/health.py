@@ -25,6 +25,7 @@ async def health_check() -> dict[str, str]:
         "pricing_engine_version": PRICING_ENGINE_VERSION,
         "environment": settings.environment,
         "scraper_headless": str(settings.scraper_headless).lower(),
+        "scraper_proxy_active": str(bool(settings.effective_scraper_proxy)).lower(),
         "playwright_browsers_path": os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "(default)"),
         "playwright_installed": pw_installed,
     }

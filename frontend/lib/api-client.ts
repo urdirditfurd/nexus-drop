@@ -104,6 +104,12 @@ export interface AdminProduct {
   image_urls: string[] | null;
   supplier_id: number | null;
   status: string;
+  quarantine_reason?: string | null;
+  margin_calculated?: number | null;
+  asin?: string | null;
+  ean?: string | null;
+  keyword?: string | null;
+  shipping_cost?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -196,8 +202,12 @@ export async function getDashboardKpis(): Promise<DashboardKPIs> {
   return apiFetch<DashboardKPIs>("/dashboard/kpis", { auth: true });
 }
 
-export async function getDashboardChart(): Promise<ChartPoint[]> {
-  return apiFetch<ChartPoint[]>("/dashboard/chart", { auth: true });
+export async function getHealth(): Promise<{
+  status: string;
+  scraper_proxy_active?: string;
+  environment?: string;
+}> {
+  return apiFetch("/health");
 }
 
 // --- Checkout ---
@@ -249,6 +259,7 @@ export interface AutoPublishStatus {
   quarantine_count: number;
   published_total: number;
   last_run: string | null;
+  scraper_proxy_active: boolean;
 }
 
 export interface AutoPublishRunResult {

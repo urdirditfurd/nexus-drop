@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, select
 
 from app.deps import AdminDep, DbDep
+from app.config import settings
 from app.models.auto_publish_log import AutoPublishLog
 from app.models.product import Product
 from app.models.setting import Setting
@@ -85,6 +86,7 @@ async def get_status(session: DbDep, _admin: AdminDep) -> AutoPublishStatus:
         quarantine_count=quarantine_count,
         published_total=published_count,
         last_run=last_run or None,
+        scraper_proxy_active=bool(settings.effective_scraper_proxy),
     )
 
 

@@ -23,6 +23,7 @@ class AutoPublishStatus(BaseModel):
     quarantine_count: int
     published_total: int
     last_run: str | None = None
+    scraper_proxy_active: bool = False
 
 
 class AutoPublishRunResponse(BaseModel):

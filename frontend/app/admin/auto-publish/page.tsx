@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   FlaskConical,
 } from "lucide-react";
+import { Alert } from "@/components/ui/Alert";
 import {
   getAutoPublishStatus,
   updateAutoPublishSettings,
@@ -119,6 +120,18 @@ export default function AdminAutoPublishPage() {
 
   return (
     <div className="space-y-8">
+      {status?.scraper_proxy_active ? (
+        <Alert variant="success" title="Proxy Résidentiel Actif">
+          Le scan des tendances et des concurrents est pleinement opérationnel.
+        </Alert>
+      ) : (
+        <Alert variant="warning" title="Mode Scraping Limité">
+          Aucun proxy résidentiel configuré. Les scans automatiques de marques (Amazon/eBay)
+          seront mis en quarantaine par sécurité (Garde-fou 0). La publication manuelle par
+          mot-clé générique fonctionne.
+        </Alert>
+      )}
+
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold">

@@ -1,34 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import { motion } from "framer-motion";
+import { RefreshCw, TrendingUp, Package } from "lucide-react";
 import {
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
-  ResponsiveContainer,
-  Legend,
-} from "recharts";
-import { TrendingUp, Flame, ArrowUpRight, RefreshCw } from "lucide-react";
-import { listAdminTrends, type AdminTrend } from "@/lib/api-client";
+  listAdminProducts,
+  listAdminTrends,
+  type AdminProduct,
+  type AdminTrend,
+} from "@/lib/api-client";
+import {
+  StatusBadge,
+  resolveProductImage,
+  formatEuro,
+} from "@/components/admin/StatusBadge";
 
-function buildRadarData(trends: AdminTrend[]) {
-  const byNiche: Record<string, { score: number; count: number }> = {};
-  for (const t of trends) {
-    const niche = t.niche ?? "Autre";
-    if (!byNiche[niche]) byNiche[niche] = { score: 0, count: 0 };
-    byNiche[niche].score += t.score;
-    byNiche[niche].count += 1;
+function competitorForProduct(product: AdminProduct, trends: AdminTrend[]): number | null {
+  const key = (product.keyword ?? product.title ?? "").toLowerCase();
+  if (!key) return null;
+  const match = trends.find((t) => key.includes(t.keyword.toLowerCase()) || t.keyword.toLowerCase().includes(key));
+  if (match?.avg_price != null) return match.avg_price;
+  if (product.sell_price > 0 && product.margin_calculated != null && product.margin_calculated > 0) {
+    return Math.round(product.sell_price / 0.98 * 100) / 100;
   }
-  return Object.entries(byNiche).map(([category, { score, count }]) => ({
-    category: category.replace(/-/g, " "),
-    score: Math.round(score / count),
-    market: Math.round(score / count * 0.85),
-  }));
+  return null;
+}
+
+function subtitle(product: AdminProduct): string {
+  const parts: string[] = [];
+  if (product.keyword) parts.push(product.keyword);
+  if (product.ean) parts.push(`EAN ${product.ean}`);
+  if (product.asin) parts.push(`ASIN ${product.asin}`);
+  return parts.join(" · ") || product.sku;
 }
 
 export default function AdminTrendsPage() {
+  const [products, setProducts] = useState<AdminProduct[]>([]);
   const [trends, setTrends] = useState<AdminTrend[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,8 +45,9 @@ export default function AdminTrendsPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await listAdminTrends();
-      setTrends(data.sort((a, b) => b.score - a.score));
+      const [prods, tr] = await Promise.all([listAdminProducts(), listAdminTrends()]);
+      setProducts(prods);
+      setTrends(tr.sort((a, b) => b.score - a.score));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur de chargement");
     } finally {
@@ -50,16 +59,52 @@ export default function AdminTrendsPage() {
     load();
   }, []);
 
-  const radarData = buildRadarData(trends);
-  const topTrends = trends.slice(0, 5);
+  const pipelineItems = useMemo(() => {
+    const sorted = [...products].sort(
+      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+    );
+    const productKeywords = new Set(
+      sorted.map((p) => (p.keyword ?? "").toLowerCase()).filter(Boolean),
+    );
+    const trendOnly = trends
+      .filter((t) => !productKeywords.has(t.keyword.toLowerCase()))
+      .slice(0, 10)
+      .map((t) => ({
+        id: `trend-${t.id}`,
+        title: t.keyword,
+        subtitle: `${t.platform ?? "multi"} · Score ${t.score.toFixed(0)}/100`,
+        supplierTotal: null as number | null,
+        competitorMin: t.avg_price,
+        status: "draft" as const,
+        quarantineReason: null as string | null,
+        image: null as string | null,
+      }));
+
+    const fromProducts = sorted.map((p) => ({
+      id: `product-${p.id}`,
+      title: p.title,
+      subtitle: subtitle(p),
+      supplierTotal: Number(p.cost_price) + Number(p.shipping_cost ?? 0),
+      competitorMin: competitorForProduct(p, trends),
+      status: p.status,
+      quarantineReason: p.quarantine_reason ?? null,
+      image: p.image_urls?.[0] ?? null,
+    }));
+
+    return [...fromProducts, ...trendOnly];
+  }, [products, trends]);
 
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Radar Tendances</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-bold">
+            <TrendingUp className="h-6 w-6 text-accent" />
+            Pipeline & Tendances
+          </h1>
           <p className="text-sm text-zinc-500">
-            {trends.length} tendance{trends.length > 1 ? "s" : ""} scannées · API live
+            {products.length} produit{products.length > 1 ? "s" : ""} · {trends.length} tendance
+            {trends.length > 1 ? "s" : ""} scannée{trends.length > 1 ? "s" : ""}
           </p>
         </div>
         <button
@@ -77,71 +122,70 @@ export default function AdminTrendsPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-zinc-500">Chargement des tendances...</p>
+        <p className="text-sm text-zinc-500">Chargement du pipeline...</p>
+      ) : pipelineItems.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-300 py-16 dark:border-zinc-700">
+          <Package className="mb-3 h-10 w-10 text-zinc-400" />
+          <p className="text-sm text-zinc-500">Aucun produit ni tendance pour le moment.</p>
+        </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-            <h2 className="mb-4 flex items-center gap-2 font-semibold">
-              <TrendingUp className="h-5 w-5 text-accent" />
-              Radar par niche
-            </h2>
-            {radarData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={350}>
-                <RadarChart data={radarData}>
-                  <PolarGrid stroke="#e4e4e7" />
-                  <PolarAngleAxis dataKey="category" tick={{ fontSize: 12 }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10 }} />
-                  <Radar
-                    name="Score boutique"
-                    dataKey="score"
-                    stroke="#008060"
-                    fill="#008060"
-                    fillOpacity={0.2}
-                  />
-                  <Radar
-                    name="Marché"
-                    dataKey="market"
-                    stroke="#6366f1"
-                    fill="#6366f1"
-                    fillOpacity={0.1}
-                  />
-                  <Legend />
-                </RadarChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-sm text-zinc-500">Aucune tendance disponible.</p>
-            )}
+        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="hidden border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 sm:grid sm:grid-cols-[auto_1fr_auto_auto] sm:gap-4">
+            <span className="pl-14">Produit</span>
+            <span />
+            <span>Prix marché</span>
+            <span className="text-right">Statut</span>
           </div>
-
-          <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-            <h2 className="mb-4 flex items-center gap-2 font-semibold">
-              <Flame className="h-5 w-5 text-orange-500" />
-              Top tendances
-            </h2>
-            <div className="space-y-3">
-              {topTrends.map((item, i) => (
-                <div
-                  key={item.id}
-                  className="flex items-center gap-4 rounded-lg border border-zinc-100 p-3 dark:border-zinc-800"
-                >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-light text-sm font-bold text-accent dark:bg-accent/20">
-                    {i + 1}
-                  </span>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{item.keyword}</p>
-                    <p className="text-xs text-zinc-500">
-                      {item.platform ?? "multi"} · Score : {item.score.toFixed(1)}/100
-                      {item.search_volume ? ` · ${item.search_volume.toLocaleString("fr-FR")} recherches/mois` : ""}
-                    </p>
+          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {pipelineItems.map((item, index) => (
+              <motion.li
+                key={item.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: index * 0.04 }}
+                className="flex flex-col gap-3 px-4 py-3 sm:grid sm:grid-cols-[auto_1fr_auto_auto] sm:items-center sm:gap-4"
+              >
+                <div className="flex min-w-0 items-center gap-3 sm:col-span-2">
+                  <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800">
+                    <Image
+                      src={resolveProductImage(item.image)}
+                      alt={item.title}
+                      fill
+                      className="object-cover"
+                      sizes="48px"
+                    />
                   </div>
-                  <div className="flex items-center gap-1 text-sm font-medium text-green-600">
-                    <ArrowUpRight className="h-4 w-4" />
-                    {item.competition ?? "—"}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-zinc-900 dark:text-zinc-100">
+                      {item.title}
+                    </p>
+                    <p className="truncate text-xs text-zinc-500">{item.subtitle}</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
+
+                <div className="pl-14 text-sm tabular-nums text-zinc-700 dark:text-zinc-300 sm:pl-0">
+                  {item.supplierTotal != null ? (
+                    <>
+                      <span className="text-zinc-500">Fourn:</span>{" "}
+                      <span className="font-medium">{formatEuro(item.supplierTotal)}</span>
+                      <span className="mx-1.5 text-zinc-300">|</span>
+                      <span className="text-zinc-500">Conc:</span>{" "}
+                      <span className="font-medium">{formatEuro(item.competitorMin)}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-zinc-500">Conc. estimé:</span>{" "}
+                      <span className="font-medium">{formatEuro(item.competitorMin)}</span>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex justify-end pl-14 sm:pl-0">
+                  <StatusBadge status={item.status} quarantineReason={item.quarantineReason} />
+                </div>
+              </motion.li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
