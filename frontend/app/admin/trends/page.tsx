@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { RefreshCw, TrendingUp, Package } from "lucide-react";
+import { RefreshCw, TrendingUp, Package, Radar } from "lucide-react";
 import {
   listAdminProducts,
   listAdminTrends,
+  scanAdminTrends,
   type AdminProduct,
   type AdminTrend,
 } from "@/lib/api-client";
@@ -15,14 +16,17 @@ import {
   resolveProductImage,
   formatEuro,
 } from "@/components/admin/StatusBadge";
+import { parseTrendMetadata } from "@/lib/trend-utils";
 
 function competitorForProduct(product: AdminProduct, trends: AdminTrend[]): number | null {
   const key = (product.keyword ?? product.title ?? "").toLowerCase();
   if (!key) return null;
-  const match = trends.find((t) => key.includes(t.keyword.toLowerCase()) || t.keyword.toLowerCase().includes(key));
-  if (match?.avg_price != null) return match.avg_price;
+  const match = trends.find(
+    (t) => key.includes(t.keyword.toLowerCase()) || t.keyword.toLowerCase().includes(key),
+  );
+  if (match?.avg_price != null) return Number(match.avg_price);
   if (product.sell_price > 0 && product.margin_calculated != null && product.margin_calculated > 0) {
-    return Math.round(product.sell_price / 0.98 * 100) / 100;
+    return Math.round((product.sell_price / 0.98) * 100) / 100;
   }
   return null;
 }
@@ -39,7 +43,9 @@ export default function AdminTrendsPage() {
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [trends, setTrends] = useState<AdminTrend[]>([]);
   const [loading, setLoading] = useState(true);
+  const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -59,6 +65,21 @@ export default function AdminTrendsPage() {
     load();
   }, []);
 
+  const handleScan = async () => {
+    setScanning(true);
+    setError(null);
+    try {
+      const result = await scanAdminTrends();
+      setToast(`${result.scanned} tendance(s) scannée(s) et enregistrée(s).`);
+      window.setTimeout(() => setToast(null), 3500);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scan échoué");
+    } finally {
+      setScanning(false);
+    }
+  };
+
   const pipelineItems = useMemo(() => {
     const sorted = [...products].sort(
       (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
@@ -66,19 +87,22 @@ export default function AdminTrendsPage() {
     const productKeywords = new Set(
       sorted.map((p) => (p.keyword ?? "").toLowerCase()).filter(Boolean),
     );
+
     const trendOnly = trends
       .filter((t) => !productKeywords.has(t.keyword.toLowerCase()))
-      .slice(0, 10)
-      .map((t) => ({
-        id: `trend-${t.id}`,
-        title: t.keyword,
-        subtitle: `${t.platform ?? "multi"} · Score ${t.score.toFixed(0)}/100`,
-        supplierTotal: null as number | null,
-        competitorMin: t.avg_price,
-        status: "draft" as const,
-        quarantineReason: null as string | null,
-        image: null as string | null,
-      }));
+      .map((t) => {
+        const meta = parseTrendMetadata(t.metadata_json);
+        return {
+          id: `trend-${t.id}`,
+          title: meta.title ?? t.keyword,
+          subtitle: `${t.platform ?? "multi"} · Score ${t.score.toFixed(0)}/100 · ${t.keyword}`,
+          supplierTotal: meta.supplier_price ?? null,
+          competitorMin: meta.competitor_min ?? (t.avg_price != null ? Number(t.avg_price) : null),
+          status: "draft" as const,
+          quarantineReason: null as string | null,
+          image: meta.image_url ?? null,
+        };
+      });
 
     const fromProducts = sorted.map((p) => ({
       id: `product-${p.id}`,
@@ -96,7 +120,13 @@ export default function AdminTrendsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-[100] rounded-lg bg-zinc-900 px-4 py-3 text-sm text-white shadow-lg">
+          {toast}
+        </div>
+      )}
+
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold">
             <TrendingUp className="h-6 w-6 text-accent" />
@@ -107,12 +137,28 @@ export default function AdminTrendsPage() {
             {trends.length > 1 ? "s" : ""} scannée{trends.length > 1 ? "s" : ""}
           </p>
         </div>
-        <button
-          onClick={load}
-          className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-        >
-          <RefreshCw className="h-4 w-4" /> Actualiser
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleScan}
+            disabled={scanning}
+            className="flex items-center gap-1 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+          >
+            {scanning ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <Radar className="h-4 w-4" />
+            )}
+            {scanning ? "Scan..." : "Scanner tendances"}
+          </button>
+          <button
+            type="button"
+            onClick={load}
+            className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          >
+            <RefreshCw className="h-4 w-4" /> Actualiser
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -126,23 +172,31 @@ export default function AdminTrendsPage() {
       ) : pipelineItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-300 py-16 dark:border-zinc-700">
           <Package className="mb-3 h-10 w-10 text-zinc-400" />
-          <p className="text-sm text-zinc-500">Aucun produit ni tendance pour le moment.</p>
+          <p className="mb-4 text-sm text-zinc-500">Aucune tendance détectée pour le moment.</p>
+          <button
+            type="button"
+            onClick={handleScan}
+            disabled={scanning}
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white"
+          >
+            Lancer un scan maintenant
+          </button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="hidden border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 sm:grid sm:grid-cols-[auto_1fr_auto_auto] sm:gap-4">
+        <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="hidden min-w-[640px] border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 sm:grid sm:grid-cols-[auto_1fr_auto_auto] sm:gap-4">
             <span className="pl-14">Produit</span>
             <span />
             <span>Prix marché</span>
             <span className="text-right">Statut</span>
           </div>
-          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <ul className="min-w-[640px] divide-y divide-zinc-100 dark:divide-zinc-800">
             {pipelineItems.map((item, index) => (
               <motion.li
                 key={item.id}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, delay: index * 0.04 }}
+                transition={{ duration: 0.25, delay: index * 0.03 }}
                 className="flex flex-col gap-3 px-4 py-3 sm:grid sm:grid-cols-[auto_1fr_auto_auto] sm:items-center sm:gap-4"
               >
                 <div className="flex min-w-0 items-center gap-3 sm:col-span-2">

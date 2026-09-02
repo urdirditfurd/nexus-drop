@@ -1,4 +1,4 @@
-"""CRUD tendances + scan démo."""
+"""CRUD tendances + scan live avec fallback réaliste."""
 
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -9,35 +9,15 @@ from sqlalchemy import select
 from app.deps import AdminDep, DbDep
 from app.models.trend import Trend
 from app.schemas.trend import TrendCreate, TrendOut, TrendScanResponse, TrendUpdate
+from app.services.trend_sync import ensure_trends_seeded, sync_trends_from_scanner
 
 router = APIRouter(prefix="/trends", tags=["trends"])
-
-# Tendances injectées lors d'un scan démo
-SCAN_SEED = [
-    {
-        "keyword": "bouteille isotherme premium",
-        "niche": "sport",
-        "platform": "ebay",
-        "score": 78.2,
-        "search_volume": 9200,
-        "avg_price": Decimal("24.90"),
-        "competition": "medium",
-    },
-    {
-        "keyword": "support laptop ergonomique",
-        "niche": "home-office",
-        "platform": "amazon",
-        "score": 81.0,
-        "search_volume": 11000,
-        "avg_price": Decimal("39.00"),
-        "competition": "low",
-    },
-]
 
 
 @router.get("", response_model=list[TrendOut])
 async def list_trends(session: DbDep, _admin: AdminDep) -> list[TrendOut]:
-    """Liste les tendances scannées."""
+    """Liste les tendances scannées — auto-seed si base vide."""
+    await ensure_trends_seeded(session, min_count=5)
     result = await session.execute(select(Trend).order_by(Trend.score.desc()))
     return [TrendOut.model_validate(t) for t in result.scalars().all()]
 
@@ -101,21 +81,15 @@ async def delete_trend(
 @router.post("/scan", response_model=TrendScanResponse)
 async def scan_trends(session: DbDep, _admin: AdminDep) -> TrendScanResponse:
     """
-    Déclenche un scan démo — insère de nouvelles tendances seed.
-    En production, le worker scraper remplacerait cette logique.
+    Déclenche un scan live (Playwright) avec fallback réaliste si CAPTCHA.
+    Persiste les résultats en base.
     """
-    created: list[Trend] = []
-    now = datetime.now(timezone.utc)
-
-    for item in SCAN_SEED:
-        trend = Trend(**item, scanned_at=now)
-        session.add(trend)
-        created.append(trend)
-
-    await session.flush()
-    for t in created:
-        await session.refresh(t)
-
+    created = await sync_trends_from_scanner(session, limit=10)
+    if not created:
+        raise HTTPException(
+            status_code=503,
+            detail="Scan tendances impossible — réessayez dans quelques minutes.",
+        )
     return TrendScanResponse(
         scanned=len(created),
         trends=[TrendOut.model_validate(t) for t in created],

@@ -2,11 +2,8 @@
 
 import { AlertTriangle } from "lucide-react";
 
-const PLACEHOLDER_IMAGE =
-  "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=200&h=200&fit=crop";
-
 export function resolveProductImage(url: string | undefined | null): string {
-  if (!url) return PLACEHOLDER_IMAGE;
+  if (!url) return "/placeholder.svg";
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
   const base = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "";
   return `${base}${url.startsWith("/") ? url : `/${url}`}`;

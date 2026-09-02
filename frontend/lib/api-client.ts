@@ -118,6 +118,29 @@ export async function listAdminProducts(): Promise<AdminProduct[]> {
   return apiFetch<AdminProduct[]>("/products", { auth: true });
 }
 
+export async function updateAdminProduct(
+  id: number,
+  payload: Partial<
+    Pick<
+      AdminProduct,
+      "title" | "sell_price" | "cost_price" | "stock" | "status" | "category" | "description"
+    >
+  >,
+): Promise<AdminProduct> {
+  return apiFetch<AdminProduct>(`/products/${id}`, {
+    method: "PATCH",
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteAdminProduct(id: number): Promise<void> {
+  return apiFetch<void>(`/products/${id}`, {
+    method: "DELETE",
+    auth: true,
+  });
+}
+
 // --- Orders ---
 
 export interface AdminOrderItem {
@@ -174,11 +197,24 @@ export interface AdminTrend {
   search_volume: number | null;
   avg_price: number | null;
   competition: string | null;
+  metadata_json: string | null;
   scanned_at: string;
+}
+
+export interface TrendScanResult {
+  scanned: number;
+  trends: AdminTrend[];
 }
 
 export async function listAdminTrends(): Promise<AdminTrend[]> {
   return apiFetch<AdminTrend[]>("/trends", { auth: true });
+}
+
+export async function scanAdminTrends(): Promise<TrendScanResult> {
+  return apiFetch<TrendScanResult>("/trends/scan", {
+    method: "POST",
+    auth: true,
+  });
 }
 
 // --- Dashboard ---
