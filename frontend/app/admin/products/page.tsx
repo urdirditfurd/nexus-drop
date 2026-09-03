@@ -121,10 +121,13 @@ export default function AdminProductsPage() {
     if (!confirmed) return;
     try {
       await deleteAdminProduct(productId);
+      setProducts((prev) => prev.filter((p) => p.id !== productId));
       showToast("Produit supprimé.");
       await load();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Échec de la suppression");
+      const msg = err instanceof Error ? err.message : "Échec de la suppression";
+      showToast(msg);
+      window.alert(`Suppression impossible : ${msg}`);
     }
   };
 

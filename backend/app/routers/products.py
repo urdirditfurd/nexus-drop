@@ -1,9 +1,13 @@
 """CRUD produits."""
 
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 
 from app.deps import AdminDep, DbDep
+from app.models.auto_publish_log import AutoPublishLog
+from app.models.listing import Listing
+from app.models.order import OrderItem
 from app.models.product import Product
 from app.schemas.product import ProductCreate, ProductOut, ProductUpdate
 from app.utils import dumps_json, loads_json_list
@@ -105,8 +109,35 @@ async def delete_product(
     session: DbDep,
     _admin: AdminDep,
 ) -> None:
-    """Supprime un produit."""
+    """Supprime un produit et détache / nettoie les références FK."""
     product = await session.get(Product, product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="Produit introuvable.")
-    await session.delete(product)
+
+    try:
+        # Logs auto-publish : détacher (nullable)
+        await session.execute(
+            update(AutoPublishLog)
+            .where(AutoPublishLog.product_id == product_id)
+            .values(product_id=None)
+        )
+        # Order items : détacher (nullable) pour conserver l'historique commandes
+        await session.execute(
+            update(OrderItem)
+            .where(OrderItem.product_id == product_id)
+            .values(product_id=None)
+        )
+        # Listings : suppression (FK non nullable)
+        listings = (
+            await session.execute(select(Listing).where(Listing.product_id == product_id))
+        ).scalars().all()
+        for listing in listings:
+            await session.delete(listing)
+
+        await session.delete(product)
+        await session.flush()
+    except IntegrityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Impossible de supprimer le produit (contrainte base) : {exc.orig}",
+        ) from exc
