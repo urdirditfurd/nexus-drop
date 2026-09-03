@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import uuid
 from decimal import Decimal
+from urllib.parse import quote_plus
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -282,8 +283,15 @@ async def _run_pipeline(
         source_url=seed.source_url or offer.url,
     )
     listing_copy = await generate_listing(draft)
-    image_path = await process_product_image(seed.source_url)
-    image_urls = [image_path] if image_path else []
+    # Image : source_url si dispo, sinon Unsplash cohérent avec le mot-clé (jamais vide en UI)
+    image_source = seed.source_url
+    if not image_source or not str(image_source).startswith("http"):
+        image_source = (
+            "https://images.unsplash.com/photo-1523275335684-37898b6baf30"
+            f"?w=800&h=800&fit=crop&q={quote_plus(keyword[:40] or 'product')}"
+        )
+    image_path = await process_product_image(image_source)
+    image_urls = [image_path] if image_path else [image_source]
 
     # 6. Publish storefront
     steps.append("publish_storefront")

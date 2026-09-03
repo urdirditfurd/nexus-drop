@@ -238,6 +238,10 @@ export async function getDashboardKpis(): Promise<DashboardKPIs> {
   return apiFetch<DashboardKPIs>("/dashboard/kpis", { auth: true });
 }
 
+export async function getDashboardChart(): Promise<ChartPoint[]> {
+  return apiFetch<ChartPoint[]>("/dashboard/chart", { auth: true });
+}
+
 export async function getHealth(): Promise<{
   status: string;
   scraper_proxy_active?: string;
